@@ -86,6 +86,7 @@
   .loadmsg{font-size:18px;margin-top:10px;min-height:24px}
   .manage div{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #EEE;font-size:20px}
   .manage button{background:#FDE7E8;color:var(--bad);font-size:16px;font-weight:700;border-radius:10px;padding:6px 12px}
+  .figure svg{width:min(320px,70%);height:auto;display:block;margin:0 auto 8px}
   .pop{animation:pop .35s ease}
   @keyframes pop{0%{transform:scale(.9)}60%{transform:scale(1.05)}100%{transform:scale(1)}}
   .shake{animation:shake .35s ease}
@@ -120,6 +121,7 @@
       <div class="count" id="count"></div>
     </div>
     <div class="qcard" id="qcard">
+      <div id="figure" class="figure hidden"></div>
       <div class="qtext" id="qtext"></div>
       <div id="answerBox" class="answer empty">?</div>
       <div id="choices" class="choices hidden"></div>
@@ -257,7 +259,10 @@ function renderQ(){
   const q = cur(); input = ""; picked = null; tries = 0; locked = false;
   $("count").textContent = `${idx+1}/${order.length}`;
   $("bar").style.width = (idx/order.length*100) + "%";
-  $("qtext").textContent = q.q.includes("=") || q.q.length > 18 ? q.q : q.q + " = ";
+  $("qtext").textContent = /^[\d\s+\-−×÷*\/().]+$/.test(q.q) ? q.q + " = " : q.q;
+  const fig = q.shape ? drawShape(q.shape, q.labels || []) : (q.svg || "");
+  $("figure").innerHTML = fig;
+  $("figure").classList.toggle("hidden", !fig);
   $("qtext").classList.toggle("long", q.q.length > 18);
   $("qcard").className = "qcard";
   $("feedback").textContent = ""; $("feedback").className = "feedback";
@@ -355,6 +360,36 @@ function finish(){
     $("review").appendChild(d);
   });
   show("done");
+}
+
+/* ---------- shapes ---------- */
+// Use "shape": "<name>" in a question. Optional "labels": ["8 cm","5 cm"] for side lengths.
+function drawShape(name, labels){
+  const S = 'stroke="#2B2D42" stroke-width="3" stroke-linejoin="round"';
+  const F1 = '#BFD7FF', F2 = '#9DBEF5', F3 = '#7FA6E8';
+  const L = (x,y,t,anchor="middle") => t ? `<text x="${x}" y="${y}" text-anchor="${anchor}" font-size="16" font-weight="700" fill="#3F43C9" font-family="Baloo 2, sans-serif">${esc(t)}</text>` : "";
+  const poly = (n, r=70, cx=100, cy=85, rot=-90) => {
+    const pts = [...Array(n)].map((_,i)=>{ const a=(rot + i*360/n)*Math.PI/180; return `${(cx+r*Math.cos(a)).toFixed(1)},${(cy+r*Math.sin(a)).toFixed(1)}`; }).join(" ");
+    return `<polygon points="${pts}" fill="${F1}" ${S}/>`;
+  };
+  const shapes = {
+    triangle:  `<polygon points="100,15 180,150 20,150" fill="${F1}" ${S}/>` + L(48,80,labels[0],"end") + L(152,80,labels[1],"start") + L(100,170,labels[2]),
+    square:    `<rect x="40" y="20" width="120" height="120" fill="${F1}" ${S}/>` + L(100,162,labels[0]) + L(32,85,labels[1],"end"),
+    rectangle: `<rect x="15" y="35" width="170" height="90" fill="${F1}" ${S}/>` + L(100,148,labels[0]) + L(192,85,labels[1],"start"),
+    circle:    `<circle cx="100" cy="85" r="70" fill="${F1}" ${S}/>`,
+    pentagon:  poly(5), hexagon: poly(6, 70, 100, 85, 0), octagon: poly(8, 70, 100, 85, 22.5),
+    rhombus:   `<polygon points="100,10 170,85 100,160 30,85" fill="${F1}" ${S}/>`,
+    trapezoid: `<polygon points="55,30 145,30 185,140 15,140" fill="${F1}" ${S}/>` + L(100,22,labels[0]) + L(100,162,labels[1]),
+    cube:      `<polygon points="40,60 120,60 120,140 40,140" fill="${F1}" ${S}/><polygon points="40,60 80,25 160,25 120,60" fill="${F2}" ${S}/><polygon points="120,60 160,25 160,105 120,140" fill="${F3}" ${S}/>`,
+    "rectangular-prism": `<polygon points="15,70 135,70 135,145 15,145" fill="${F1}" ${S}/><polygon points="15,70 60,30 180,30 135,70" fill="${F2}" ${S}/><polygon points="135,70 180,30 180,105 135,145" fill="${F3}" ${S}/>`,
+    "triangular-prism": `<polygon points="20,140 70,50 120,140" fill="${F1}" ${S}/><polygon points="70,50 140,25 190,115 120,140" fill="${F2}" ${S}/>`,
+    "square-pyramid": `<polygon points="30,130 130,130 100,10" fill="${F1}" ${S}/><polygon points="130,130 175,100 100,10" fill="${F3}" ${S}/>`,
+    cylinder:  `<path d="M40,35 L40,135 A60,18 0 0 0 160,135 L160,35" fill="${F2}" ${S}/><ellipse cx="100" cy="35" rx="60" ry="18" fill="${F1}" ${S}/>`,
+    cone:      `<path d="M100,10 L40,135 A60,18 0 0 0 160,135 Z" fill="${F2}" ${S}/><path d="M40,135 A60,18 0 0 1 160,135" fill="none" stroke="#2B2D42" stroke-width="2" stroke-dasharray="6 5"/>`,
+    sphere:    `<circle cx="100" cy="85" r="70" fill="${F1}" ${S}/><path d="M30,85 A70,20 0 0 0 170,85" fill="none" stroke="#2B2D42" stroke-width="2"/><path d="M30,85 A70,20 0 0 1 170,85" fill="none" stroke="#2B2D42" stroke-width="2" stroke-dasharray="6 5"/><ellipse cx="75" cy="55" rx="14" ry="9" fill="#fff" opacity=".6"/>`
+  };
+  const body = shapes[name];
+  return body ? `<svg viewBox="-35 0 270 180" xmlns="http://www.w3.org/2000/svg">${body}</svg>` : "";
 }
 
 /* ---------- keypad ---------- */
